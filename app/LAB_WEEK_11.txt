@@ -1,0 +1,77 @@
+1. Bagian kode yang menangani penyimpanan hasil foto berdasarkan URI
+
+Kode yang mengatur proses penyimpanan file ke MediaStore adalah fungsi berikut di ProviderFileManager.kt:
+
+private fun insertToStore(
+    fileInfo: FileInfo,
+    contentUri: Uri,
+    contentValues: ContentValues
+) {
+    executor.execute {
+        val insertedUri = contentResolver.insert(contentUri, contentValues)
+        insertedUri?.let {
+            val inputStream = contentResolver.openInputStream(fileInfo.uri)
+            val outputStream = contentResolver.openOutputStream(insertedUri)
+            IOUtils.copy(inputStream, outputStream)
+        }
+    }
+}
+
+Bagian ini yang benar-benar:
+- menerima file hasil kamera (via URI)
+- membuat entry di MediaStore
+- lalu menyalin file ke lokasi final (Gallery)
+
+
+
+2. Penjelasan atribut FileInfo
+
+Di FileInfo.kt terdapat 5 atribut:
+val uri: Uri,
+val file: File,
+val name: String,
+val relativePath: String,
+val mimeType: String
+
+• Atribut pertama: uri
+➡ Mensimpan URI yang dipakai oleh kamera untuk menulis hasil foto atau video.
+Artinya kamera Android akan menyimpan file ke lokasi yang sesuai dengan URI ini.
+
+• Atribut keempat: relativePath
+➡ Ini adalah folder tujuan di dalam MediaStore, misalnya:
+"Pictures"
+"Movies"
+
+Android akan menyimpan file ke:
+/storage/emulated/0/Pictures/ atau /storage/emulated/0/Movies/
+
+
+
+3. (Bonus) Kronologi lengkap dari user mengambil foto sampai file masuk ke MediaStore
+
+1) User menekan tombol foto
+    → openImageCapture() dipanggil.
+
+2) Aplikasi membuat FileInfo
+    → generatePhotoUri() membuat file + URI
+    → URI ini diberikan ke kamera (takePictureLauncher.launch(uri)).
+
+3) Kamera dibuka & user mengambil foto
+
+4) Kamera menyimpan hasil foto ke URI sementara
+    → File disimpan di folder private app
+    (sesuai FileProvider + file_provider_paths.xml)
+
+5) Callback TakePicture() terpanggil
+    → providerFileManager.insertImageToStore(photoInfo) dipanggil.
+
+6) insertToStore()
+    - Membuat entry baru di MediaStore melalui: contentResolver.insert()
+    - Membuka InputStream dari file sementara.
+    -  Membuka OutputStream ke path MediaStore.
+
+7) File disalin ke MediaStore
+    → IOUtils.copy() menyalin foto ke Gallery folder final.
+
+8) File muncul di Gallery
+    Karena sudah berada di MediaStore dengan MIME type & relativePath yang benar.
